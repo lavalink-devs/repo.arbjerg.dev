@@ -1,10 +1,14 @@
+@file:Suppress("PropertyName")
+
 val ktor_version: String by project
 val kotlin_version: String by project
 val logback_version: String by project
+val kaml_version: String by project
 
 plugins {
     application
     kotlin("jvm") version "1.7.10"
+    kotlin("plugin.serialization") version "1.4.20"
 }
 
 group = "dev.arbjerg.repo"
@@ -22,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.8.0")
     implementation("io.ktor:ktor-server-html-builder-jvm:$ktor_version")
     implementation("io.ktor:ktor-server-core-jvm:$ktor_version")
     implementation("org.jetbrains:kotlin-css-jvm:1.0.0-pre.129-kotlin-1.4.20")
@@ -30,6 +34,7 @@ dependencies {
     implementation("io.ktor:ktor-serialization-gson-jvm:$ktor_version")
     implementation("io.ktor:ktor-server-netty-jvm:$ktor_version")
     implementation("ch.qos.logback:logback-classic:$logback_version")
+    implementation("com.charleskorn.kaml:kaml:$kaml_version")
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
 }

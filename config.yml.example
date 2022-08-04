@@ -1,0 +1,4 @@
+repositories:
+  - owner: "freyacodes"
+    name: "lavalink"
+    statusAccessToken: "..."
