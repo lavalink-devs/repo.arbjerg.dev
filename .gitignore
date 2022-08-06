@@ -4,6 +4,7 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 config.yml
+store
 
 ### STS ###
 .apt_generated

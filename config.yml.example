@@ -1,4 +1,12 @@
+port: 8080
+host: "0.0.0.0"
+storagePath: "store"
+
 repositories:
   - owner: "freyacodes"
     name: "lavalink"
-    statusAccessToken: "..."
+    repoName: "lavalink"
+    secret: "secretsecret"
+    artifactRegex: ".*\\.jar"
+    accessToken: "..."
+    loginUsername: "freyacodes"

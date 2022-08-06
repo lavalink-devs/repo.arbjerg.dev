@@ -1,20 +1,27 @@
 package dev.arbjerg.repo
 
+import dev.arbjerg.repo.controllers.StorageController
+import dev.arbjerg.repo.routes.Webhook
+import io.ktor.client.*
+import io.ktor.serialization.gson.*
+import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import dev.arbjerg.repo.routes.configureWebhook
-import io.ktor.serialization.gson.*
 import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.application.*
 
 fun main() {
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
+    val config = Config.load()
+    val httpClient = HttpClient {
+        developmentMode = true
+        expectSuccess = true
+        followRedirects = true
+    }
+    val storageController = StorageController(config)
+    embeddedServer(Netty, port = config.port, host = config.host) {
         install(ContentNegotiation) {
-            gson {
-            }
+            gson()
         }
 
-        val config = Config.load()
-        configureWebhook(config)
+        Webhook(config, httpClient, storageController).apply { configure() }
     }.start(wait = true)
 }

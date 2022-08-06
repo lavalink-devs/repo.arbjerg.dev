@@ -6,7 +6,10 @@ import java.io.File
 
 @Serializable
 data class Config(
-    val repositories: List<RepositoryConfig>
+    val repositories: List<RepositoryConfig>,
+    val storagePath: String,
+    val port: Int,
+    val host: String
 ) {
     companion object {
         fun load(): Config {
@@ -16,4 +19,12 @@ data class Config(
 }
 
 @Serializable
-data class RepositoryConfig(val owner: String, val name: String, val secret: String, val statusAccessToken: String?)
+data class RepositoryConfig(
+    val owner: String,
+    val name: String,
+    val repoName: String,
+    val secret: String,
+    val artifactRegex: String,
+    val accessToken: String,
+    val loginUsername: String
+)
