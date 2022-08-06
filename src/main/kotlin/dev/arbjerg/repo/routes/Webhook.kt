@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 import dev.arbjerg.repo.Config
 import dev.arbjerg.repo.RepositoryConfig
+import dev.arbjerg.repo.controllers.CommitStatusPublisher
 import dev.arbjerg.repo.controllers.StorageController
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -18,7 +19,8 @@ import io.ktor.util.cio.*
 import io.ktor.util.pipeline.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.jvm.javaio.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.regex.Pattern
@@ -26,7 +28,12 @@ import java.util.zip.ZipFile
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-class Webhook(private val config: Config, private val http: HttpClient, private val storageController: StorageController) {
+class Webhook(
+    private val config: Config,
+    private val http: HttpClient,
+    private val storageController: StorageController,
+    private val statusPublisher: CommitStatusPublisher
+) {
     private val gson = Gson()
     private val log = LoggerFactory.getLogger(Webhook::class.java)
     private val zenLogger = LoggerFactory.getLogger("Zen")
@@ -37,7 +44,7 @@ class Webhook(private val config: Config, private val http: HttpClient, private 
                 val requestBody = call.request.receiveChannel().toByteArray().toString(charset("UTF-8"))
                 val eventName = call.request.header("X-GitHub-Event")
                 if (eventName == "ping") {
-                    val zen = call.receive(JsonObject::class)["zen"].asString
+                    val zen = gson.fromJson(requestBody, JsonObject::class.java)["zen"].asString
                     zenLogger.info(zen)
                     call.response.status(HttpStatusCode.NoContent)
                     return@post
@@ -46,27 +53,55 @@ class Webhook(private val config: Config, private val http: HttpClient, private 
                     return@post
                 }
                 val payload = gson.fromJson(requestBody, WebhookPayload::class.java)
-                val repository = verifyRepository(config, requestBody, payload)
-                this@configure.log.info("Workflow run for ${payload.repository.fullName}")
-                call.response.status(HttpStatusCode.Accepted)
 
-                launch {
-                    storageController.submit(repository, payload.workflowRun.headSha, downloadArtifacts(repository, payload.workflowRun))
+                val repository = config.repositories.find {
+                    it.name.equals(payload.repository.name, ignoreCase = true)
+                            && it.owner.equals(payload.repository.owner.login, ignoreCase = true)
+                } ?: error("${payload.repository.fullName} is not supported")
+
+                verifyIntegrity(repository, requestBody)
+                val sha = payload.workflowRun.headSha
+                try {
+                    if (payload.action != "completed") {
+                        if (payload.action == "requested" && !storageController.artifactsExist(repository, sha)) {
+                            statusPublisher.publishPending(repository, sha, "Waiting for artifacts")
+                        }
+                        this@Webhook.log.info("Ignoring workflow_run because action is ${payload.action}")
+                        call.response.status(HttpStatusCode.NoContent)
+                        return@post
+                    }
+
+                    if (!storageController.artifactsExist(repository, sha)) {
+                        statusPublisher.publishPending(repository, sha, "Downloading artifacts")
+                    }
+
+                    this@Webhook.log.info("Workflow completed for ${payload.repository.fullName}")
+                    call.response.status(HttpStatusCode.Accepted)
+
+                    async(Dispatchers.IO) {
+                        storageController.submit(
+                            repository,
+                            payload.workflowRun.headSha,
+                            downloadArtifacts(repository, payload.workflowRun)
+                        )
+                    }.start()
+
+                    if (!storageController.artifactsExist(repository, sha)) {
+                        statusPublisher.publishPending(repository, sha, "Downloading artifacts")
+                    }
+                } catch (e: Exception) {
+                    if (!storageController.artifactsExist(repository, sha)) {
+                        statusPublisher.publishFailure(repository, sha, e.javaClass.canonicalName + ": " + e.message)
+                    }
                 }
             }
         }
     }
 
-    private fun PipelineContext<Unit, ApplicationCall>.verifyRepository(
-        config: Config,
-        rawBody: String,
-        payload: WebhookPayload
-    ): RepositoryConfig {
-        val repoConfig = config.repositories.find {
-            it.name.equals(payload.repository.name, ignoreCase = true)
-                    && it.owner.equals(payload.repository.owner.login, ignoreCase = true)
-        } ?: error("${payload.repository.fullName} is not supported")
-
+    private fun PipelineContext<Unit, ApplicationCall>.verifyIntegrity(
+        repoConfig: RepositoryConfig,
+        rawBody: String
+    ) {
         val githubHashHeader = call.request.header("X-Hub-Signature-256")
         if (githubHashHeader?.startsWith("sha256=") != true) error("Unexpected hash algorithm: $githubHashHeader")
         val githubHash = githubHashHeader.drop("sha256=".length)
@@ -78,7 +113,6 @@ class Webhook(private val config: Config, private val http: HttpClient, private 
             .toHex()
 
         if (digest != githubHash) error("Invalid signature")
-        return repoConfig
     }
 
     private fun ByteArray.toHex(): String = joinToString("") {
@@ -86,6 +120,7 @@ class Webhook(private val config: Config, private val http: HttpClient, private 
     }
 
     data class WebhookPayload(
+        val action: String,
         val repository: Repository,
         @SerializedName("workflow_run")
         val workflowRun: WorkflowRun

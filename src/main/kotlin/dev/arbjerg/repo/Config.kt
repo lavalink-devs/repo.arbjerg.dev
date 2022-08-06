@@ -9,7 +9,8 @@ data class Config(
     val repositories: List<RepositoryConfig>,
     val storagePath: String,
     val port: Int,
-    val host: String
+    val host: String,
+    val baseUrl: String
 ) {
     companion object {
         fun load(): Config {
@@ -22,7 +23,7 @@ data class Config(
 data class RepositoryConfig(
     val owner: String,
     val name: String,
-    val repoName: String,
+    val storeName: String,
     val secret: String,
     val artifactRegex: String,
     val accessToken: String,
