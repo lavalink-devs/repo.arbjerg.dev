@@ -57,7 +57,7 @@ class Webhook(
                 val repository = config.repositories.find {
                     it.name.equals(payload.repository.name, ignoreCase = true)
                             && it.owner.equals(payload.repository.owner.login, ignoreCase = true)
-                } ?: error("${payload.repository.fullName} is not supported")
+                } ?: return@post this@Webhook.log.info("Ignoring webhook from unrecognised repository ${payload.repository.fullName}")
 
                 verifyIntegrity(repository, requestBody)
                 val sha = payload.workflowRun.headSha
