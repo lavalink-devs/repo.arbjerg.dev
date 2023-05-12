@@ -79,11 +79,15 @@ class Webhook(
                     call.response.status(HttpStatusCode.Accepted)
 
                     async(Dispatchers.IO) {
-                        storageController.submit(
-                            repository,
-                            payload.workflowRun.headSha,
-                            downloadArtifacts(repository, payload.workflowRun)
-                        )
+                        try {
+                            storageController.submit(
+                                repository,
+                                payload.workflowRun.headSha,
+                                downloadArtifacts(repository, payload.workflowRun)
+                            )
+                        } catch (e: Exception) {
+                            this@Webhook.log.error("Error in coroutine", e)
+                        }
                     }.start()
 
                     if (!storageController.artifactsExist(repository, sha)) {
