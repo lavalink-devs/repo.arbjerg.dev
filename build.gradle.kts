@@ -9,6 +9,7 @@ plugins {
     application
     kotlin("jvm") version "1.7.10"
     kotlin("plugin.serialization") version "1.4.20"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "dev.arbjerg.repo"
